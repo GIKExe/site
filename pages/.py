@@ -1,9 +1,9 @@
-# dir: user, request, data, exit (return)
+# dir: req, data, exit (return)
 
 from re import findall
-headers = request.headers
 
 
+headers = req.headers
 text = ''
 if 'sec-ch-ua' in headers:
 	res = findall(r'"(.*?)";v="(.*?)"', headers['sec-ch-ua'])
@@ -23,6 +23,6 @@ data = data.replace('<!-- SLDJFLIJWLI -->'.encode('UTF-8'),
 	text.replace('\n','<br>').replace('\t', '').encode('UTF-8'), 1)
 
 data = data.replace('<!-- SLDJFLIJWLI -->'.encode('UTF-8'),
-	request.raw_data.replace('\n','<br>').replace('\r', '').encode('UTF-8'), 1)
+	req.raw_data.replace('\n','<br>').replace('\r', '').encode('UTF-8'), 1)
 
 exit(data)

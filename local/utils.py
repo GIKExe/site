@@ -1,7 +1,8 @@
 
-from os.path import getmtime, isfile, isdir
+from os import listdir
+from os.path import getmtime, isfile, isdir, exists
 from threading import Thread
-
+from time import time, sleep
 
 def join(*args):
 	if args[0] == '':
@@ -32,26 +33,36 @@ def dexec(text, **kwargs):
 
 
 class File:
+	type = 1
 	time = -1
+	check_time = -1
+	data = b''
+	deleted = False
 
-	def __init__(self, path):
+	def __init__(self, path=None):
 		self.path = path
-		self.check()
+		self.check(log=False)
 
 	def __call__(self, *args, **kwargs):
 		self.check()
-		text = self.data.decode('UTF-8')
+		text = self.data.decode('UTF-8', errors='IGNORE')
 		return dexec(text, **kwargs)
 
-	def check(self):
+	def check(self, log=True):
+		if self.deleted:
+			return
+		if time() - self.check_time < 1:
+			return
 		if not isfile(self.path):
-			raise Exception(f'"{self.path}" не является файлом.')
+			self.deleted = True; return
 
 		new_time = getmtime(self.path)
 		if self.time != new_time:
 			with open(self.path, 'rb') as file:
 				self.data = file.read()
 			self.time = new_time
+			if log: print('файл обновлён:', self.path)
+		self.check_time = time()
 
 	def read(self):
 		self.check()
@@ -60,3 +71,63 @@ class File:
 	def write(self):
 		with open(self.path, 'wb') as file:
 			file.write(self.data)
+
+
+class Dir(dict):
+	type = 0
+	time = -1
+	check_time = -1
+	deleted = False
+
+	def __init__(self, path):
+		self.path = path
+		self.check(log=False)
+
+	def __missing__(self, key):
+		if '/' not in key: raise Exception('ошибка, такого ключа не нет')
+		key, path = key.split('/', 1)
+		if key not in self: raise Exception('ошибка, такого ключа не нет')
+		return self[key][path]
+
+	def __contains__(self, key):
+		if '/' not in key: return key in self.keys()
+		key, path = key.split('/', 1)
+		if key not in self: return False
+		return path in self[key]
+			
+	def check(self, log=True):
+		if self.deleted:
+			return
+		if time() - self.check_time < 5:
+			return
+		if not isdir(self.path):
+			self.deleted = True; return
+
+		for name, obj in list(self.items()):
+			if obj == self: continue
+			obj.check()
+			if obj.deleted:
+				del self[name]
+				print('объект удалён:', obj.path)
+
+		new_time = getmtime(self.path)
+		if self.time != new_time:
+			for name in listdir(self.path):
+				if name in self.keys(): continue
+				path = join(self.path, name)
+				if isdir(path):
+					self[name] = Dir(path)
+					if log: print('добавлена директория:', path)
+				elif isfile(path):
+					self[name] = File(path)
+					if log: print('добавлен файл:', path)
+
+			self.time = new_time
+		self.check_time = time()
+
+
+if __name__ == '__main__':
+	d = Dir('../pages')
+	while True:
+		d.check()
+		sleep(2)

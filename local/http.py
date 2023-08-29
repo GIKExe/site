@@ -5,32 +5,18 @@ from os.path import getmtime, isfile, isdir
 from .utils import join, File
 
 
-def response(data=b'', code=200, **kwagrs):
-	headers = f'HTTP/1.1 {code}\r\n'
-	for key, value in list(kwagrs.items()):
-		if key == 'Content-Type':
-			value += ';charset=UTF-8'
-		headers += f'{key}: {value}\r\n'
-	headers = headers.encode('UTF-8')
+# class Page:
+# 	main = None
 
-	if type(data) is str:
-		data = data.encode('UTF-8')
+# 	def __init__(self, path):
+# 		self.html = File(join(path, 'index.html'))
+# 		if isfile(join(path, 'index.py')):
+# 			self.main = File(join(path, 'index.py'))
 
-	return headers + b'\r\n' + data
-
-
-class Page:
-	main = None
-
-	def __init__(self, path):
-		self.html = File(join(path, 'index.html'))
-		if isfile(join(path, 'main.py')):
-			self.main = File(join(path, 'main.py'))
-
-	def processing(self, user, request):
-		if self.main is None:
-			return self.html.read()
-		return self.main(user=user, request=request, data=self.html.read())
+# 	def processing(self, req):
+# 		if self.main is None:
+# 			return self.html.read()
+# 		return self.main(req=req, data=self.html.read())
 
 
 class User:
@@ -38,17 +24,75 @@ class User:
 		self.socket, self.addr = socket.accept()
 		self.recv = self.socket.recv
 		self.send = self.socket.send
-		self.close = self.socket.close
+
+	def close(self):
+		try: self.socket.close()
+		except: pass
 
 
 class Request:
-	def __init__(self, raw_data):
+	code = 400
+	def __init__(self, user):
+		self.user = user
+		raw_data = user.recv(1024).decode('UTF-8', errors='IGNORE')
 		self.raw_data = raw_data
+		if '\r\n\r\n' not in raw_data: print('1 ', end=''); return
+		raw_data, self.data = raw_data.split('\r\n\r\n', 1)
+		raw_data = raw_data.replace('\r\n', '\n')
+		if raw_data.count('\n') < 1: print('2 ', end=''); return
+		headers = raw_data.split('\n')
+
+		line = headers.pop(0)
+		if line.count(' ') != 2: print('3 ', end=''); return
+		command, path, version = line.split(' ')
+		if command not in ['GET']: print('4 ', end=''); return
+		self.command = command
+		if version != 'HTTP/1.1': print('5 ', end=''); return
+		# self.version = version
+		if '?' in path:
+			path, path_data = path.split('?', 1)
+		else:
+			path_data = ''
+		self.path = path[1:]
+		self.path_data = path_data
+
+		self.headers = {}
+		for header in headers:
+			if ': ' not in header: continue
+			key, value = header.split(': ', 1)
+			self.headers[key] = value
+
 		self.code = 200
-		res = (findall(r'^(.*?) /(.*?) HTTP/(.)\.(.)\r((?:\n.*?: .*?\r){1,})\n\r\n', raw_data) or [None])[0]
-		if not res: self.code = 400; return
-		self.command = res[0]
-		self.path = unquote(res[1])
-		self.version = res[2:4]
-		self.headers = {key:value for key,value in findall(r'\n(.*?): (.*?)\r', res[-1])}
-		self.data = raw_data.split('\r\n\r\n', 1)[-1]
+
+
+# def response(data=b'', code=200, **kwagrs):
+# 	headers = f'HTTP/1.1 {code}\r\n'
+# 	if 'Connection' not in kwagrs:
+# 		kwagrs['Connection'] = 'close'
+# 	for key, value in list(kwagrs.items()):
+# 		headers += f'{key}: {value}\r\n'
+# 	headers = headers.encode('UTF-8')
+
+# 	if type(data) is str:
+# 		data = data.encode('UTF-8')
+
+# 	return headers + b'\r\n' + data
+
+
+_type = type
+class Response:
+	def __init__(self, req, data=b'', type='html', close=True, **kwagrs):
+		if _type(data) is str:
+			data = data.encode('UTF-8')
+
+		headers = f'''HTTP/1.1 {req.code}
+Connection: {"close" if close else 'keep-alive'}
+Content-type: text/{type};charset=UTF-8
+'''
+		for key, value in kwagrs:
+			headers += f'{key}: {value}\n'
+
+		# print(headers, '\n')
+		headers = headers.replace('\n', '\r\n').encode('UTF-8')
+		req.user.send(headers + b'\r\n' + data)
+		if close: req.user.close()

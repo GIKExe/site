@@ -4,27 +4,21 @@ from os.path import getmtime, isfile, isdir
 
 from socket import socket as Socket, AF_INET, SOCK_STREAM, timeout
 
-from local.utils import join, thread
-from local.http import response, Page, User, Request
+# from pygame.time import Clock
+from time import sleep
+
+from local.utils import join, thread, File, Dir
+from local.http import User, Request, Response
 
 
 class Server:
 	socket = None
 	running = True
 
-	def __init__(self, port=80, host=''):
+	def __init__(self, path, port=80, host=''):
 		self.addr = (host, port)
-		self.cache = {}
-
-	def connect_dir(self, path, site_path=''):
-		# надо бы добавить отслеживание изменений в директории...
-		if not isdir(path): return
-		if isfile(join(path, 'index.html')):
-			self.cache[site_path] = Page(path)
-
-		for name in listdir(path):
-			if isdir(join(path, name)):
-				self.connect_dir(join(path, name), join(site_path, name))
+		self.cache = Dir(path)
+		self.cache[''] = self.cache
 
 	# *безопасное закрытие сервера
 	def close(self):
@@ -60,34 +54,56 @@ class Server:
 			user = User(self.socket)
 			thread(self.processing, user)
 
-	def get_page(self, key):
-		if key not in self.cache:
-			if '404' not in self.cache:
-				return 404, None
-			key = '404'
-		page = self.cache[key]
-		return 200, page
+	def get_data_from_page(self, req):
+		if req.path in self.cache:
+			obj = self.cache[req.path]
+
+			if '.html' in obj:
+				data = obj['.html'].read()
+			else:
+				data = b''
+
+			if '.py' in obj:
+				file = obj['.py']
+				data = file(req=req, data=data)
+			return data
 
 	def processing(self, user):
-		raw_data = user.recv(1024).decode('UTF-8')
-		request = Request(raw_data)
+		try: req = Request(user)
+		except ConnectionResetError:
+			user.close(); return
 
-		data = b''
-		if request.code != 400:
-			request.code, page = self.get_page(request.path)
-			if request.code != 404:
-				data = page.processing(user, request)
+		if req.code == 400:
+			print('Ошибка:', user.addr)
+			print(req.raw_data, '\n')
+			Response(req)
+			return
 
-		res_data = response(data, code=request.code, **{
-			'Connection': 'close',
-			'Content-Type': 'text/html'
-		})
-		user.send(res_data)
-		user.close()
+		print(user.addr)
+		print(req.raw_data, '\n')
+
+		self.cache.check()
+		if req.path in self.cache:
+			obj = self.cache[req.path]
+			if obj.type:
+				if req.path.endswith('.css'): type = 'css'
+				elif req.path.endswith('.js'): type = 'js'
+				else: type = '*'
+				Response(req, obj.read() or b'', type=type)
+			else:
+				data = self.get_data_from_page(req)
+				Response(req, data)
+		else:
+			if '404' in self.cache:
+				req.path = '404'
+				data = self.get_data_from_page(req)
+			else:
+				req.code = 404
+				data = b''
+			Response(req, data)
 
 
 if __name__ == '__main__':
-	server = Server()
-	server.connect_dir('pages')
-	print(server.cache.keys())
+	server = Server('pages')
+	print(server.cache.keys(), '\n')
 	server.start()

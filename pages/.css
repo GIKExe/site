@@ -1,0 +1,10 @@
+
+body {
+	font-family: Arial;
+}
+
+.info{
+	font-family: Consolas;
+	background: rgb(200,200,200);
+	padding: 10px;
+}
