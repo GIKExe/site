@@ -104,7 +104,7 @@ class Dir(dict):
 			self.deleted = True; return
 
 		for name, obj in list(self.items()):
-			if obj == self: continue
+			# if obj == self: continue
 			obj.check()
 			if obj.deleted:
 				del self[name]

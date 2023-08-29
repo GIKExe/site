@@ -18,7 +18,6 @@ class Server:
 	def __init__(self, path, port=80, host=''):
 		self.addr = (host, port)
 		self.cache = Dir(path)
-		self.cache[''] = self.cache
 
 	# *безопасное закрытие сервера
 	def close(self):
@@ -54,19 +53,22 @@ class Server:
 			user = User(self.socket)
 			thread(self.processing, user)
 
-	def get_data_from_page(self, req):
-		if req.path in self.cache:
-			obj = self.cache[req.path]
+	def dir_processing(self, req, dir):
+		data = b''
+		if '.html' in dir:
+			data = dir['.html'].read()
+		if '.py' in dir:
+			file = dir['.py']
+			data = file(req=req, data=data)
+		return data
 
-			if '.html' in obj:
-				data = obj['.html'].read()
-			else:
-				data = b''
-
-			if '.py' in obj:
-				file = obj['.py']
-				data = file(req=req, data=data)
-			return data
+	def response_404(self, req):
+		if '404' in self.cache:
+			data = self.dir_processing(req, self.cache['404'])
+		else:
+			req.code = 404
+			data = b''
+		Response(req, data)
 
 	def processing(self, user):
 		try: req = Request(user)
@@ -83,25 +85,27 @@ class Server:
 		print(req.raw_data, '\n')
 
 		self.cache.check()
-		if req.path in self.cache:
-			obj = self.cache[req.path]
-			if obj.type:
+		if (req.path in self.cache) or (not req.path):
+			if req.path:
+				obj = self.cache[req.path]
+			else:
+				obj = self.cache
+
+			if obj.type == 0: # обработка директории
+				data = self.dir_processing(req, obj)
+				if data:
+					Response(req, data)
+				else:
+					self.response_404(req)
+		
+			elif obj.type == 1: # обработка файла
 				if req.path.endswith('.css'): type = 'css'
 				elif req.path.endswith('.js'): type = 'js'
 				else: type = '*'
 				Response(req, obj.read() or b'', type=type)
-			else:
-				data = self.get_data_from_page(req)
-				Response(req, data)
-		else:
-			if '404' in self.cache:
-				req.path = '404'
-				data = self.get_data_from_page(req)
-			else:
-				req.code = 404
-				data = b''
-			Response(req, data)
 
+		else:
+			self.response_404(req)
 
 if __name__ == '__main__':
 	server = Server('pages')
