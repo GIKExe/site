@@ -44,7 +44,7 @@ class File:
 		self.check(log=False)
 
 	def __call__(self, *args, **kwargs):
-		self.check()
+		# self.check()
 		text = self.data.decode('UTF-8', errors='IGNORE')
 		return dexec(text, **kwargs)
 
@@ -65,7 +65,7 @@ class File:
 		self.check_time = time()
 
 	def read(self):
-		self.check()
+		# self.check()
 		return self.data
 
 	def write(self):
