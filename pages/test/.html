@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="utf-8">
+	<title>Тест</title>
+	<!-- <link rel="stylesheet" href=".css"> -->
+	<link rel="stylesheet" href="https://pyscript.net/latest/pyscript.css"/>
+	<script defer src="https://pyscript.net/latest/pyscript.js"></script>
+</head>
+
+<body>
+	<section>
+		<input id="001" class="py-input" type="text">
+		<button id="002" class="py-button" type="submit" py-click="ping()">Пинг</button>
+		<py-script>
+			from socket import socket as Socket
+
+			def ping():
+				socket = Socket()
+				socket.connect(('localhost', 80))
+				socket.send(b'12312372816273862376813')
+				# socket.close()
+				
+		</py-script>
+	</section>
+</body>
+</html>

@@ -99,7 +99,8 @@ class Server:
 					self.response_404(req)
 		
 			elif obj.type == 1: # обработка файла
-				if req.path.endswith('.css'): type = 'css'
+				if req.path.endswith('.html'): type = 'html'
+				elif req.path.endswith('.css'): type = 'css'
 				elif req.path.endswith('.js'): type = 'js'
 				else: type = '*'
 				Response(req, obj.read() or b'', type=type)
