@@ -33,7 +33,6 @@ def dexec(text, **kwargs):
 
 
 class File:
-	type = 1
 	time = -1
 	check_time = -1
 	data = b''
@@ -54,7 +53,9 @@ class File:
 		if time() - self.check_time < 1:
 			return
 		if not isfile(self.path):
-			self.deleted = True; return
+			self.data = b''
+			self.deleted = True
+			return
 
 		new_time = getmtime(self.path)
 		if self.time != new_time:
@@ -74,7 +75,6 @@ class File:
 
 
 class Dir(dict):
-	type = 0
 	time = -1
 	check_time = -1
 	deleted = False
@@ -104,7 +104,7 @@ class Dir(dict):
 			self.deleted = True; return
 
 		for name, obj in list(self.items()):
-			# if obj == self: continue
+			if obj == self: continue
 			obj.check()
 			if obj.deleted:
 				del self[name]
@@ -128,6 +128,7 @@ class Dir(dict):
 
 if __name__ == '__main__':
 	d = Dir('../pages')
-	while True:
-		d.check()
-		sleep(2)
+	f = File('../pages/.html')
+
+	print(type(f) is File, type(f) == File)
+	print(type(f) is Dir, type(f) == Dir)

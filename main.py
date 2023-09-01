@@ -9,6 +9,7 @@ from time import sleep
 
 from local.utils import join, thread, File, Dir
 from local.http import User, Request, Response
+from local import html
 
 
 class Server:
@@ -18,6 +19,7 @@ class Server:
 	def __init__(self, path, port=80, host=''):
 		self.addr = (host, port)
 		self.cache = Dir(path)
+		self.cache[''] = self.cache
 
 	# *безопасное закрытие сервера
 	def close(self):
@@ -62,53 +64,49 @@ class Server:
 			data = file(req=req, data=data)
 		return data
 
-	def response_404(self, req):
-		if '404' in self.cache:
-			data = self.dir_processing(req, self.cache['404'])
-		else:
-			req.code = 404
-			data = b''
-		Response(req, data)
-
 	def processing(self, user):
-		try: req = Request(user)
+		try:
+			req = Request(user)
 		except ConnectionResetError:
+			user.close(); return
+
+		if not req.raw_data:
 			user.close(); return
 
 		if req.code == 400:
 			print('Ошибка:', user.addr)
 			print(req.raw_data, '\n')
-			Response(req)
-			return
+			Response(req, html.page.Error(400, 'запрос составлен неправильно')); return
 
 		print(user.addr)
 		print(req.raw_data, '\n')
 
 		self.cache.check()
-		if (req.path in self.cache) or (not req.path):
-			if req.path:
-				obj = self.cache[req.path]
-			else:
-				obj = self.cache
-
-			if obj.type == 0: # обработка директории
+		if req.path in self.cache:
+			obj = self.cache[req.path]
+			
+			# обработка директории
+			if type(obj) is Dir: 
 				data = self.dir_processing(req, obj)
-				if data:
-					Response(req, data)
-				else:
-					self.response_404(req)
-		
-			elif obj.type == 1: # обработка файла
-				if req.path.endswith('.html'): type = 'html'
-				elif req.path.endswith('.css'): type = 'css'
-				elif req.path.endswith('.js'): type = 'js'
-				else: type = '*'
-				Response(req, obj.read() or b'', type=type)
+				Response(req, data or html.page.Error(msg='пустая промежуточная директория'))
+			
+			# обработка файла
+			elif type(obj) is File: 
+				if req.path.endswith('.html'): _type = 'html'
+				elif req.path.endswith('.css'): _type = 'css'
+				elif req.path.endswith('.js'): _type = 'js'
+				else: _type = '*'
+				Response(req, obj.read(), type=_type)
 
 		else:
-			self.response_404(req)
+			if '404' in self.cache:
+				data = self.dir_processing(req, self.cache['404'])
+			else:
+				data = html.page.Error(404, 'страница не найдена')
+			Response(req, data)
+
 
 if __name__ == '__main__':
 	server = Server('pages')
-	print(server.cache.keys(), '\n')
+	print('Сервер запускается...')
 	server.start()
